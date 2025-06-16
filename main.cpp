@@ -19,12 +19,13 @@
 static DcmTag parseTagKey(OFConsoleApplication &app, const std::string &input_tag);
 
 auto containsForbiddenSubstring = [](const OFString &str, const std::set<OFString> &words) {
-     return std::ranges::any_of(words, [&str](const OFString &word) {
-         return str.find(word) != OFString_npos;
-     });
+    return std::ranges::any_of(words,
+                               [&str](const OFString &word) {
+                                   return str.find(word) != OFString_npos;
+                               });
 };
 
-constexpr auto FNO_CONSOLE_APPLICATION{"fnodcdump"};
+constexpr auto  FNO_CONSOLE_APPLICATION{"fnodcdump"};
 static OFLogger logger = OFLog::getLogger(fmt::format("fno.apps.{}", FNO_CONSOLE_APPLICATION).c_str());
 
 
@@ -44,8 +45,9 @@ int main(int argc, char *argv[]) {
 
     const char *opt_inDirectory{nullptr};
     // const char *opt_outDirectory{"./"};
-    const char *opt_dumpFilepath{"./dumped_tags.csv"};
+    const char *        opt_dumpFilepath{"./dumped_tags.csv"};
     std::vector<DcmTag> opt_inputTags{};
+    OFBool              opt_filterSeries{OFTrue};
 
     constexpr int LONGCOL{20};
     constexpr int SHORTCOL{4};
@@ -61,6 +63,7 @@ int main(int argc, char *argv[]) {
 
     cmd.addGroup("Tag options:");
     cmd.addOption("--tag", "-t", 1, "tag: gggg,eeee=\"string\" or name=\"string\"", "DICOM tag key");
+    cmd.addOption("--filter-series", "-sf", "disable filtering out secondary/report series (default: true)");
 
     cmd.addGroup("output options:");
     // cmd.addOption("--out-directory",
@@ -69,7 +72,7 @@ int main(int argc, char *argv[]) {
     //               "directory: string (default: \"./\" (current directory))",
     //               "write output dump file to output directory");
     cmd.addOption("--filepath",
-                  "-f",
+                  "-fp",
                   1,
                   "filepath: string (default: \"./dumped_tags.csv\")",
                   "path of the dump file excluding extension");
@@ -95,10 +98,13 @@ int main(int argc, char *argv[]) {
                 DcmTag tag = parseTagKey(app, tagString);
                 if (tag.getGroup() == 0xffff || tag.getElement() == 0xffff) continue;
                 opt_inputTags.emplace_back(tag);
-
             } while (cmd.findOption("--tag", 0, OFCommandLine::FOM_NextFromLeft));
         }
-        //
+
+        if (cmd.findOption("--filter-series")) {
+            opt_filterSeries = OFFalse;
+        }
+
         // if (cmd.findOption("--out-directory")) {
         //     app.checkValue(cmd.getValue(opt_outDirectory));
         // }
@@ -128,7 +134,7 @@ int main(int argc, char *argv[]) {
     }
 
     // const auto time = std::chrono::system_clock::now();
-    const auto tt   = std::chrono::system_clock::to_time_t(
+    const auto tt = std::chrono::system_clock::to_time_t(
                                                          std::chrono::system_clock::now()
                                                         );
     const std::tm tm = *std::localtime(&tt);
@@ -149,14 +155,16 @@ int main(int argc, char *argv[]) {
         ++iter;
     }
 
-    const std::set<OFString> imagetypes_words{"secondary", "derived", "localizer"};
-    const std::set<OFString> seriesdesc_words{"topog", "scout", "report", "dose", "protocol"};
+    const std::set<OFString> forbiddenWords{
+        "secondary", "derived", "localizer", "topog", "scout", "report", "dose", "protocol"
+    };
+    // const std::set<OFString> seriesdesc_words{"topog", "scout", "report", "dose", "protocol"};
 
     // main work
     DcmFileFormat dcmff;
-    OFString currentSeriesuid{}, lastSeriesuid{};
+    OFString      currentSeriesuid{}, lastSeriesuid{};
     filestream.print("{}\n", header);
-    for (const auto &entry : std::filesystem::recursive_directory_iterator(opt_inDirectory)) {
+    for (const auto &entry: std::filesystem::recursive_directory_iterator(opt_inDirectory)) {
         if (entry.is_directory() || entry.path().filename() == "DICOMDIR") {
             OFLOG_DEBUG(logger, fmt::format("skipping entry \"{}\"", entry.path().string()));
             continue;
@@ -181,27 +189,31 @@ int main(int argc, char *argv[]) {
             continue;
         }
 
-        OFString patientid{}, studyuid{}, seriesdesc{}, imagetype{};
+        OFString seriesdesc;
+        dataset->findAndGetOFString(DCM_SeriesDescription, seriesdesc);
+
+        // filter out series first
+        if (opt_filterSeries) {
+            OFString imagetype{};
+            dataset->findAndGetOFString(DCM_ImageType, imagetype);
+            OFStandard::toLower(imagetype);
+            if (containsForbiddenSubstring(imagetype, forbiddenWords)) {
+                OFLOG_INFO(logger,
+                           fmt::format("dataset's ImageType contains \"{}\", not writing tags", imagetype));
+                continue;
+            }
+
+            OFStandard::toLower(seriesdesc);
+            if (containsForbiddenSubstring(seriesdesc, forbiddenWords)) {
+                OFLOG_INFO(logger,
+                           fmt::format("dataset's SeriesDescription contains \"{}\", not writing tags", seriesdesc));
+                continue;
+            }
+        }
+
+        OFString patientid{}, studyuid{};
         dataset->findAndGetOFString(DCM_PatientID, patientid);
         dataset->findAndGetOFString(DCM_StudyInstanceUID, studyuid);
-        dataset->findAndGetOFString(DCM_SeriesDescription, seriesdesc);
-        dataset->findAndGetOFString(DCM_ImageType, imagetype);
-
-        OFStandard::toLower(imagetype);
-        OFStandard::toLower(seriesdesc);
-
-        if (containsForbiddenSubstring(imagetype, imagetypes_words)) {
-            OFLOG_INFO(logger,
-                       fmt::format("dataset contains forbidden ImageType \"{}\", not writing tags", imagetype));
-            continue;
-        }
-
-        if (containsForbiddenSubstring(seriesdesc, seriesdesc_words)) {
-            OFLOG_INFO(logger,
-                       fmt::format("dataset contains forbidden SeriesDescription \"{}\", not writing tags",
-                           seriesdesc));
-            continue;
-        }
 
         OFString values{patientid + ";" + studyuid + ";" + seriesdesc};
         OFString val{};
@@ -230,7 +242,7 @@ int main(int argc, char *argv[]) {
 }
 
 DcmTag parseTagKey(OFConsoleApplication &app, const std::string &input_tag) {
-    unsigned short group{0xffff}; // default unknown tag
+    unsigned short group{0xffff};   // default unknown tag
     unsigned short element{0xffff}; // default unknown tag
 
     const std::size_t comma = input_tag.find(',');
@@ -239,17 +251,16 @@ DcmTag parseTagKey(OFConsoleApplication &app, const std::string &input_tag) {
     std::string errorMsg{};
     if (comma != std::string::npos) {
         // parse input tag in hex format: 0010,0020
-        group = std::stoul(input_tag.substr(0, comma), nullptr, 16);
+        group   = std::stoul(input_tag.substr(0, comma), nullptr, 16);
         element = std::stoul(input_tag.substr(comma + 1), nullptr, 16);
-
     } else {
         // parse input tag in name/dict format: PatientID
         const DcmDataDictionary &globalDataDict = dcmDataDict.rdlock();
-        const DcmDictEntry *dicentry = globalDataDict.findEntry(input_tag.c_str());
+        const DcmDictEntry *     dicentry       = globalDataDict.findEntry(input_tag.c_str());
         dcmDataDict.rdunlock();
 
         if (dicentry != nullptr) {
-            group = dicentry->getGroup();
+            group   = dicentry->getGroup();
             element = dicentry->getElement();
         } else {
             errorMsg = "bad key format or dictionary name not found in dictionary: " + input_tag;
@@ -258,7 +269,7 @@ DcmTag parseTagKey(OFConsoleApplication &app, const std::string &input_tag) {
         }
     }
 
-    DcmTag tag{group, element};
+    DcmTag         tag{group, element};
     const OFString tagname = tag.getTagName();
     if (tagname == "PatientID" ||
         tagname == "StudyInstanceUID" ||
