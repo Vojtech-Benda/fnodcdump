@@ -43,8 +43,8 @@ int main(int argc, char *argv[]) {
     OFCommandLine        cmd;
 
     const char *opt_inDirectory{nullptr};
-    const char *opt_outDirectory{"./"};
-    const char *opt_dumpFileName{"dumped_tags.csv"};
+    // const char *opt_outDirectory{"./"};
+    const char *opt_dumpFilepath{"./dumped_tags.csv"};
     std::vector<DcmTag> opt_inputTags{};
 
     constexpr int LONGCOL{20};
@@ -63,16 +63,16 @@ int main(int argc, char *argv[]) {
     cmd.addOption("--tag", "-t", 1, "tag: gggg,eeee=\"string\" or name=\"string\"", "DICOM tag key");
 
     cmd.addGroup("output options:");
-    cmd.addOption("--out-directory",
-                  "-od",
-                  1,
-                  "directory: string (default: \"./\" (current directory))",
-                  "write output dump file to output directory");
-    cmd.addOption("--filename",
+    // cmd.addOption("--out-directory",
+    //               "-od",
+    //               1,
+    //               "directory: string (default: \"./\" (current directory))",
+    //               "write output dump file to output directory");
+    cmd.addOption("--filepath",
                   "-f",
                   1,
-                  "filename: string (default: \"dumped_tags\")",
-                  "name of the dumped file excluding extension");
+                  "filepath: string (default: \"./dumped_tags.csv\")",
+                  "path of the dump file excluding extension");
 
     prepareCmdLineArgs(argc, argv, FNO_CONSOLE_APPLICATION);
     if (app.parseCommandLine(cmd, argc, argv)) {
@@ -98,19 +98,19 @@ int main(int argc, char *argv[]) {
 
             } while (cmd.findOption("--tag", 0, OFCommandLine::FOM_NextFromLeft));
         }
+        //
+        // if (cmd.findOption("--out-directory")) {
+        //     app.checkValue(cmd.getValue(opt_outDirectory));
+        // }
 
-        if (cmd.findOption("--out-directory")) {
-            app.checkValue(cmd.getValue(opt_outDirectory));
-        }
-
-        if (cmd.findOption("--filename")) {
-            app.checkValue(cmd.getValue(opt_dumpFileName));
+        if (cmd.findOption("--filepath")) {
+            app.checkValue(cmd.getValue(opt_dumpFilepath));
         }
     }
 
     if (std::filesystem::exists(opt_inDirectory)) {
         if (std::filesystem::is_regular_file(opt_inDirectory)) {
-            OFLOG_ERROR(logger, fmt::format("input path \"{}\" is not directory", opt_inDirectory));
+            OFLOG_ERROR(logger, fmt::format("input directory path \"{}\" is not directory", opt_inDirectory));
             return EXITCODE_COMMANDLINE_SYNTAX_ERROR;
         }
 
@@ -119,7 +119,7 @@ int main(int argc, char *argv[]) {
             return EXITCODE_COMMANDLINE_SYNTAX_ERROR;
         }
     } else {
-        OFLOG_ERROR(logger, fmt::format("Input directory path \"{}\" does not exist", opt_inDirectory));
+        OFLOG_ERROR(logger, fmt::format("input directory path \"{}\" does not exist", opt_inDirectory));
         return EXITCODE_COMMANDLINE_SYNTAX_ERROR;
     }
 
@@ -133,10 +133,10 @@ int main(int argc, char *argv[]) {
                                                         );
     const std::tm tm = *std::localtime(&tt);
 
-    std::filesystem::path outputPath{opt_outDirectory};
-    const std::string dumpFilename = fmt::format("{}-{:%Y-%m-%d-%H-%M-%S}.csv", opt_dumpFileName, tm);
-    outputPath /= dumpFilename;
-    auto filestream = fmt::output_file(outputPath.string());
+    // std::filesystem::path outputPath{opt_outDirectory};
+    const std::string dumpFilepath = fmt::format("{}-{:%Y-%m-%d-%H-%M-%S}.csv", opt_dumpFilepath, tm);
+    // outputPath /= dumpFilename;
+    auto filestream = fmt::output_file(dumpFilepath);
 
     std::string header{"PatientID;StudyInstanceUID;SeriesDescription"};
 
@@ -224,7 +224,7 @@ int main(int argc, char *argv[]) {
         lastSeriesuid = currentSeriesuid;
     }
 
-    fmt::print("tags written to {}\n", outputPath.string());
+    fmt::print("tags written to {}\n", dumpFilepath);
     filestream.close();
     return 0;
 }
