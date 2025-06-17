@@ -19,7 +19,7 @@ Script additionally filters out series whose tags ImageType and SeriesDescriptio
 * ImageType - derived, secondary, localizer - secondary image data, processed data or topograms/scouts
 * SeriesDescription - topog, scout, dose, report, protocol
 
-The filter can be disable with the command line option ```--filter-series (-sf)```, enabled by default.
+The filter is enabled by default and can be disable with the command line option ```--filter-series (-sf)```.
 
 ## Requirements
 * fmt v11.1 or newer
