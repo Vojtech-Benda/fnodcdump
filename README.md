@@ -1,4 +1,6 @@
-A script for dumping DICOM tags from a batch of locally stored DICOM studies. It iterates over a directory containing studies in individual directories and extracts DICOM tags from each series. Tags are provided as command line arguments.
+A script for dumping DICOM tags from a batch of locally stored DICOM studies. It iterates over a directory containing studies in individual directories and extracts DICOM tags from each series. Tags are provided as command line arguments with ```--tag``` or ```-t```. Tags need to be written in one of the following formats:
+* dictionary name: PatientID, TableSpeed, SeriesInstanceUID
+* hex number in double quotes: "0010,0020", "0018,9309" or without leading zeros: "20,0E" 
 
 ## Usage
 ```
