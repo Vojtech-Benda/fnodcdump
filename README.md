@@ -16,6 +16,7 @@ Tags with no value (empty string "") or no tags are dumped as "EMPTY" (without d
 Script additionally filters out series whose tags ImageType and SeriesDescription contain these strings/substrings:
 * ImageType - derived, secondary, localizer - secondary image data, processed data or topograms/scouts
 * SeriesDescription - topog, scout, dose, report, protocol
+
 The filter can be disable with the command line option ```-sf```.
 
 ## Requirements
