@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <chrono>
 #include <filesystem>
 #include <ranges>
@@ -44,11 +45,11 @@ int main(int argc, char *argv[]) {
 
   OFConsoleApplication app(FNO_CONSOLE_APPLICATION,
                            "DICOM tag file dumping tool", rcsid.c_str());
-  OFCommandLine cmd;
+  OFCommandLine cmd{};
 
-  const char *opt_inDirectory{nullptr};
-  // const char *opt_outDirectory{"./"};
-  const char *opt_dumpFilepath{"./dumped_tags.csv"};
+  std::string opt_inDirectory{};
+  std::string opt_outDirectory{"./"};
+  std::string opt_dumpFilepath{"./dumped_tags.csv"};
   std::vector<DcmTag> opt_inputTags{};
   OFBool opt_filterSeries{OFTrue};
 
@@ -73,14 +74,12 @@ int main(int argc, char *argv[]) {
                 "tag: gggg,eeee=\"string\" or name=\"string\"",
                 "DICOM tag key");
   cmd.addOption(
-      "--filter-series", "-sf",
+      "--filter-series", "-fs",
       "disable filtering out secondary/report series (default: true)");
 
   cmd.addGroup("output options:");
-  // cmd.addOption("--out-directory",
-  //               "-od",
-  //               1,
-  //               "directory: string (default: \"./\" (current directory))",
+  // cmd.addOption("--out-directory", "-od", 1,
+  //               "directory: string (default: `./` (current directory))",
   //               "write output dump file to output directory");
   cmd.addOption("--filepath", "-fp", 1,
                 "filepath: string (default: \"./dumped_tags.csv\")",
@@ -116,7 +115,7 @@ int main(int argc, char *argv[]) {
     }
 
     // if (cmd.findOption("--out-directory")) {
-    //     app.checkValue(cmd.getValue(opt_outDirectory));
+    //   app.checkValue(cmd.getValue(opt_outDirectory));
     // }
 
     if (cmd.findOption("--filepath")) {
@@ -127,21 +126,20 @@ int main(int argc, char *argv[]) {
   if (std::filesystem::exists(opt_inDirectory)) {
     if (std::filesystem::is_regular_file(opt_inDirectory)) {
       OFLOG_ERROR(logger,
-                  fmt::format("input directory path \"{}\" is not directory",
+                  fmt::format("input directory path `{}` is not directory",
                               opt_inDirectory));
       return EXITCODE_COMMANDLINE_SYNTAX_ERROR;
     }
 
     if (std::filesystem::is_empty(opt_inDirectory)) {
       OFLOG_ERROR(logger,
-                  fmt::format("input directory path \"{}\" has no DICOM files",
+                  fmt::format("input directory path `{}` has no DICOM files",
                               opt_inDirectory));
       return EXITCODE_COMMANDLINE_SYNTAX_ERROR;
     }
   } else {
-    OFLOG_ERROR(logger,
-                fmt::format("input directory path \"{}\" does not exist",
-                            opt_inDirectory));
+    OFLOG_ERROR(logger, fmt::format("input directory path `{}` does not exist",
+                                    opt_inDirectory));
     return EXITCODE_COMMANDLINE_SYNTAX_ERROR;
   }
 
@@ -167,21 +165,21 @@ int main(int argc, char *argv[]) {
     if (iter != opt_inputTags.end()) {
       header += ";";
     }
-    header += iter->getTagName();
+    header += std::string(iter->getTagName());
     ++iter;
   }
 
-  const std::set<OFString> forbiddenWords{"secondary", "derived", "localizer",
-                                          "topog",     "scout",   "report",
-                                          "dose",      "protocol"};
+  const std::set<std::string> forbiddenWords{
+      "secondary", "derived", "localizer", "topog",
+      "scout",     "report",  "dose",      "protocol"};
   // const std::set<OFString> seriesdesc_words{"topog", "scout", "report",
   // "dose", "protocol"};
 
-  // main work
-  DcmFileFormat dcmff;
-  OFString currentSeriesuid{}, lastSeriesuid{};
-
   filestream.print("{}\n", header);
+
+  // main work
+  DcmFileFormat dcmff{};
+  std::string currentSeriesuid{}, lastSeriesuid{};
 
   for (const auto &entry :
        std::filesystem::recursive_directory_iterator(opt_inDirectory)) {
@@ -206,22 +204,26 @@ int main(int argc, char *argv[]) {
     DcmDataset *dataset = dcmff.getDataset();
 
     dataset->findAndGetOFString(DCM_SeriesInstanceUID, currentSeriesuid);
+
     if (currentSeriesuid == lastSeriesuid) {
       continue;
     }
 
-    OFString seriesdesc{};
+    std::string seriesdesc{};
     dataset->findAndGetOFString(DCM_SeriesDescription, seriesdesc);
 
     // filter out series first
     if (opt_filterSeries) {
-      OFString imagetype{};
+      std::string imagetype{};
       dataset->findAndGetOFString(DCM_ImageType, imagetype);
-      OFStandard::toLower(imagetype);
+      std::transform(imagetype.begin(), imagetype.end(), imagetype.begin(),
+                     ::tolower);
+
+      // OFStandard::toLower(imagetype);
       if (containsForbiddenSubstring(imagetype, forbiddenWords)) {
         OFLOG_INFO(
             logger,
-            fmt::format("dataset's ImageType contains \"{}\", not writing tags",
+            fmt::format("dataset's ImageType contains `{}`, not writing tags",
                         imagetype));
         continue;
       }
@@ -231,18 +233,18 @@ int main(int argc, char *argv[]) {
         OFLOG_INFO(
             logger,
             fmt::format(
-                "dataset's SeriesDescription contains \"{}\", not writing tags",
+                "dataset's SeriesDescription contains `{}`, not writing tags",
                 seriesdesc));
         continue;
       }
     }
 
-    OFString patientid{}, studyuid{};
+    std::string patientid{}, studyuid{};
     dataset->findAndGetOFString(DCM_PatientID, patientid);
     dataset->findAndGetOFString(DCM_StudyInstanceUID, studyuid);
 
-    OFString values{patientid + ";" + studyuid + ";" + seriesdesc};
-    OFString val{};
+    std::string values{patientid + ";" + studyuid + ";" + seriesdesc};
+    std::string val{};
 
     if (!opt_inputTags.empty()) {
       auto iter_val = opt_inputTags.begin();
