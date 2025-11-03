@@ -1,0 +1,11 @@
+# IDE files
+.idea/
+.vscode/
+.cache/
+
+# build files
+build/
+cmake-build-*/
+
+# configuration files
+CMakePresets.json
