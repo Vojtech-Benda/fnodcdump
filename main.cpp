@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <chrono>
+#include <dcmtk/ofstd/ofcond.h>
 #include <filesystem>
 #include <ranges>
 #include <set>
@@ -31,14 +32,16 @@ auto containsForbiddenSubstring = [](const OFString &str,
   });
 };
 
+enum class E_Dump_Level { STUDY, SERIES };
+
 constexpr auto FNO_CONSOLE_APPLICATION{"fnodcdump"};
 static OFLogger logger = OFLog::getLogger(
     fmt::format("fno.apps.{}", FNO_CONSOLE_APPLICATION).c_str());
 
 int main(int argc, char *argv[]) {
   // constexpr auto    FNO_CONSOLE_APPLICATION{"fnodcdump"};
-  constexpr auto APP_VERSION{"0.1.0"};
-  constexpr auto RELEASE_DATE{"2025-06-10"};
+  constexpr std::string APP_VERSION{"0.1.0"};
+  constexpr std::string RELEASE_DATE{"2025-06-10"};
   const std::string rcsid = fmt::format(
       "${}: ver. {} rel. {}\n$dcmtk: ver. {} rel. {}", FNO_CONSOLE_APPLICATION,
       APP_VERSION, RELEASE_DATE, OFFIS_DCMTK_VERSION, OFFIS_DCMTK_RELEASEDATE);
@@ -51,7 +54,8 @@ int main(int argc, char *argv[]) {
   std::string opt_outDirectory{"./"};
   std::string opt_dumpFilepath{"./dumped_tags.csv"};
   std::vector<DcmTag> opt_inputTags{};
-  OFBool opt_filterSeries{OFTrue};
+  bool opt_dumpSecondarySeries{false};
+  E_Dump_Level opt_dumpLevel{E_Dump_Level::STUDY};
 
   constexpr int LONGCOL{20};
   constexpr int SHORTCOL{4};
@@ -69,13 +73,15 @@ int main(int argc, char *argv[]) {
 
   OFLog::addOptions(cmd);
 
+  cmd.addOption("--series-level", "-series",
+                "dump tags at series level (default at study level)");
   cmd.addGroup("Tag options:");
   cmd.addOption("--tag", "-t", 1,
                 "tag: gggg,eeee=\"string\" or name=\"string\"",
                 "DICOM tag key");
   cmd.addOption(
-      "--filter-series", "-fs",
-      "disable filtering out secondary/report series (default: true)");
+      "--dump-secondary-series", "-dss",
+      "include tag dump from secondary/report series (default: false)");
 
   cmd.addGroup("output options:");
   // cmd.addOption("--out-directory", "-od", 1,
@@ -110,8 +116,12 @@ int main(int argc, char *argv[]) {
       } while (cmd.findOption("--tag", 0, OFCommandLine::FOM_NextFromLeft));
     }
 
-    if (cmd.findOption("--filter-series")) {
-      opt_filterSeries = OFFalse;
+    if (cmd.findOption("--series-level")) {
+      opt_dumpLevel = E_Dump_Level::SERIES;
+    }
+
+    if (cmd.findOption("--dump-secondary-series")) {
+      opt_dumpSecondarySeries = true;
     }
 
     // if (cmd.findOption("--out-directory")) {
@@ -180,22 +190,19 @@ int main(int argc, char *argv[]) {
   // main work
   DcmFileFormat dcmff{};
   std::string currentSeriesuid{}, lastSeriesuid{};
+  OFCondition cond{};
 
   for (const auto &entry :
        std::filesystem::recursive_directory_iterator(opt_inDirectory)) {
     if (entry.is_directory() || entry.path().filename() == "DICOMDIR") {
       OFLOG_DEBUG(logger,
-                  fmt::format("skipping entry \"{}\"", entry.path().string()));
+                  fmt::format("skipping entry `{}`", entry.path().string()));
       continue;
     }
 
-    // load data just before pixel data, PixelData=(0x7fe0,0x0010)
-    if (dcmff
-            .loadFileUntilTag(entry.path().string().c_str(), EXS_Unknown,
-                              EGL_noChange, DCM_MaxReadLength, ERM_autoDetect,
-                              {0x7fdf, 0x0009})
-            .bad()) {
-      OFLOG_WARN(logger, fmt::format("failed loading file \"{}\"",
+    cond = dcmff.loadFile(entry.path().string());
+    if (cond.bad()) {
+      OFLOG_WARN(logger, fmt::format("failed loading file `{}`",
                                      entry.path().string()));
       dcmff.clear();
       continue;
@@ -204,7 +211,7 @@ int main(int argc, char *argv[]) {
     DcmDataset *dataset = dcmff.getDataset();
 
     dataset->findAndGetOFString(DCM_SeriesInstanceUID, currentSeriesuid);
-
+    /*
     if (currentSeriesuid == lastSeriesuid) {
       continue;
     }
@@ -213,7 +220,7 @@ int main(int argc, char *argv[]) {
     dataset->findAndGetOFString(DCM_SeriesDescription, seriesdesc);
 
     // filter out series first
-    if (opt_filterSeries) {
+    if (opt_dumpSecondarySeries) {
       std::string imagetype{};
       dataset->findAndGetOFString(DCM_ImageType, imagetype);
       std::transform(imagetype.begin(), imagetype.end(), imagetype.begin(),
@@ -262,6 +269,7 @@ int main(int argc, char *argv[]) {
     filestream.print("{}\n", values);
     fmt::print("written tags for {}, {}\n", patientid, seriesdesc);
     lastSeriesuid = currentSeriesuid;
+    */
   }
 
   fmt::print("tags written to {}\n", dumpFilepath);
