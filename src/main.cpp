@@ -1,6 +1,5 @@
 #include <algorithm>
 #include <chrono>
-#include <dcmtk/ofstd/ofcond.h>
 #include <filesystem>
 #include <ranges>
 #include <set>
@@ -22,6 +21,9 @@
 #include "dcmtk/oflog/oflog.h"
 #include "dcmtk/ofstd/ofconapp.h"
 
+#include "include/dumpTags.hpp"
+#include "include/logger.hpp"
+
 static DcmTag parseTagKey(OFConsoleApplication &app,
                           const std::string &input_tag);
 
@@ -35,10 +37,13 @@ auto containsForbiddenSubstring = [](const OFString &str,
 enum class E_Dump_Level { STUDY, SERIES };
 
 constexpr auto FNO_CONSOLE_APPLICATION{"fnodcdump"};
-static OFLogger logger = OFLog::getLogger(
-    fmt::format("fno.apps.{}", FNO_CONSOLE_APPLICATION).c_str());
+// static OFLogger logger = OFLog::getLogger(
+//     fmt::format("fno.apps.{}", FNO_CONSOLE_APPLICATION).c_str());
+
+OFLogger logger = OFLog::getLogger(FNO_CONSOLE_APPLICATION);
 
 int main(int argc, char *argv[]) {
+  fmt::print("{}", logger.getLogLevel());
   // constexpr auto    FNO_CONSOLE_APPLICATION{"fnodcdump"};
   constexpr std::string APP_VERSION{"0.1.0"};
   constexpr std::string RELEASE_DATE{"2025-06-10"};
@@ -179,99 +184,104 @@ int main(int argc, char *argv[]) {
     ++iter;
   }
 
-  const std::set<std::string> forbiddenWords{
-      "secondary", "derived", "localizer", "topog",
-      "scout",     "report",  "dose",      "protocol"};
-  // const std::set<OFString> seriesdesc_words{"topog", "scout", "report",
-  // "dose", "protocol"};
+  // const std::set<std::string> forbiddenWords{
+  //     "secondary", "derived", "localizer", "topog",
+  //     "scout",     "report",  "dose",      "protocol"};
 
   filestream.print("{}\n", header);
 
   // main work
-  DcmFileFormat dcmff{};
-  std::string currentSeriesuid{}, lastSeriesuid{};
-  OFCondition cond{};
+  // DcmFileFormat dcmff{};
+  // std::string currentSeriesuid{}, lastSeriesuid{};
+  // OFCondition cond{};
 
+  // can be directories with DICOM files or straight up DICOM files
+  std::vector<std::filesystem::path> paths{};
   for (const auto &entry :
-       std::filesystem::recursive_directory_iterator(opt_inDirectory)) {
-    if (entry.is_directory() || entry.path().filename() == "DICOMDIR") {
-      OFLOG_DEBUG(logger,
-                  fmt::format("skipping entry `{}`", entry.path().string()));
-      continue;
-    }
-
-    cond = dcmff.loadFile(entry.path().string());
-    if (cond.bad()) {
-      OFLOG_WARN(logger, fmt::format("failed loading file `{}`",
-                                     entry.path().string()));
-      dcmff.clear();
-      continue;
-    }
-
-    DcmDataset *dataset = dcmff.getDataset();
-
-    dataset->findAndGetOFString(DCM_SeriesInstanceUID, currentSeriesuid);
-    /*
-    if (currentSeriesuid == lastSeriesuid) {
-      continue;
-    }
-
-    std::string seriesdesc{};
-    dataset->findAndGetOFString(DCM_SeriesDescription, seriesdesc);
-
-    // filter out series first
-    if (opt_dumpSecondarySeries) {
-      std::string imagetype{};
-      dataset->findAndGetOFString(DCM_ImageType, imagetype);
-      std::transform(imagetype.begin(), imagetype.end(), imagetype.begin(),
-                     ::tolower);
-
-      // OFStandard::toLower(imagetype);
-      if (containsForbiddenSubstring(imagetype, forbiddenWords)) {
-        OFLOG_INFO(
-            logger,
-            fmt::format("dataset's ImageType contains `{}`, not writing tags",
-                        imagetype));
-        continue;
-      }
-
-      OFStandard::toLower(seriesdesc);
-      if (containsForbiddenSubstring(seriesdesc, forbiddenWords)) {
-        OFLOG_INFO(
-            logger,
-            fmt::format(
-                "dataset's SeriesDescription contains `{}`, not writing tags",
-                seriesdesc));
-        continue;
-      }
-    }
-
-    std::string patientid{}, studyuid{};
-    dataset->findAndGetOFString(DCM_PatientID, patientid);
-    dataset->findAndGetOFString(DCM_StudyInstanceUID, studyuid);
-
-    std::string values{patientid + ";" + studyuid + ";" + seriesdesc};
-    std::string val{};
-
-    if (!opt_inputTags.empty()) {
-      auto iter_val = opt_inputTags.begin();
-      while (iter_val != opt_inputTags.end()) {
-        if (iter_val != opt_inputTags.end()) {
-          values += ";";
-        }
-        dataset->findAndGetOFString(*iter_val, val);
-        values += val;
-        ++iter_val;
-        val.clear();
-      }
-    }
-
-    filestream.print("{}\n", values);
-    fmt::print("written tags for {}, {}\n", patientid, seriesdesc);
-    lastSeriesuid = currentSeriesuid;
-    */
+       std::filesystem::directory_iterator(opt_inDirectory)) {
+    paths.push_back(entry);
   }
 
+  // for (const auto &entry :
+  //      std::filesystem::directory_iterator(opt_inDirectory)) {
+  //   if (entry.is_directory() || entry.path().filename() == "DICOMDIR") {
+  //     OFLOG_DEBUG(logger,
+  //                 fmt::format("skipping entry `{}`", entry.path().string()));
+  //     continue;
+  //   }
+
+  // cond = dcmff.loadFile(entry.path().string());
+  // if (cond.bad()) {
+  //   OFLOG_WARN(logger, fmt::format("failed loading file `{}`",
+  //                                  entry.path().string()));
+  //   dcmff.clear();
+  //   continue;
+  // }
+
+  // DcmDataset *dataset = dcmff.getDataset();
+  /*
+  dataset->findAndGetOFString(DCM_SeriesInstanceUID, currentSeriesuid);
+
+  if (currentSeriesuid == lastSeriesuid) {
+    continue;
+  }
+
+  std::string seriesdesc{};
+  dataset->findAndGetOFString(DCM_SeriesDescription, seriesdesc);
+
+  // filter out series first
+  if (opt_dumpSecondarySeries) {
+    std::string imagetype{};
+    dataset->findAndGetOFString(DCM_ImageType, imagetype);
+    std::transform(imagetype.begin(), imagetype.end(), imagetype.begin(),
+                   ::tolower);
+
+    // OFStandard::toLower(imagetype);
+    if (containsForbiddenSubstring(imagetype, forbiddenWords)) {
+      OFLOG_INFO(
+          logger,
+          fmt::format("dataset's ImageType contains `{}`, not writing tags",
+                      imagetype));
+      continue;
+    }
+
+    OFStandard::toLower(seriesdesc);
+    if (containsForbiddenSubstring(seriesdesc, forbiddenWords)) {
+      OFLOG_INFO(
+          logger,
+          fmt::format(
+              "dataset's SeriesDescription contains `{}`, not writing tags",
+              seriesdesc));
+      continue;
+    }
+  }
+
+  std::string patientid{}, studyuid{};
+  dataset->findAndGetOFString(DCM_PatientID, patientid);
+  dataset->findAndGetOFString(DCM_StudyInstanceUID, studyuid);
+
+  std::string values{patientid + ";" + studyuid + ";" + seriesdesc};
+  std::string val{};
+
+  if (!opt_inputTags.empty()) {
+    auto iter_val = opt_inputTags.begin();
+    while (iter_val != opt_inputTags.end()) {
+      if (iter_val != opt_inputTags.end()) {
+        values += ";";
+      }
+      dataset->findAndGetOFString(*iter_val, val);
+      values += val;
+      ++iter_val;
+      val.clear();
+    }
+  }
+
+  filestream.print("{}\n", values);
+  fmt::print("written tags for {}, {}\n", patientid, seriesdesc);
+  lastSeriesuid = currentSeriesuid;
+  */
+  // }
+  (void)iteratePaths();
   fmt::print("tags written to {}\n", dumpFilepath);
   filestream.close();
   return 0;
