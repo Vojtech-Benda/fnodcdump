@@ -34,17 +34,11 @@ auto containsForbiddenSubstring = [](const OFString &str,
   });
 };
 
-enum class E_Dump_Level { STUDY, SERIES };
-
 constexpr auto FNO_CONSOLE_APPLICATION{"fnodcdump"};
-// static OFLogger logger = OFLog::getLogger(
-//     fmt::format("fno.apps.{}", FNO_CONSOLE_APPLICATION).c_str());
 
 OFLogger logger = OFLog::getLogger(FNO_CONSOLE_APPLICATION);
 
 int main(int argc, char *argv[]) {
-  fmt::print("{}", logger.getLogLevel());
-  // constexpr auto    FNO_CONSOLE_APPLICATION{"fnodcdump"};
   constexpr std::string APP_VERSION{"0.1.0"};
   constexpr std::string RELEASE_DATE{"2025-06-10"};
   const std::string rcsid = fmt::format(
@@ -58,7 +52,7 @@ int main(int argc, char *argv[]) {
   std::string opt_inDirectory{};
   std::string opt_outDirectory{"./"};
   std::string opt_dumpFilepath{"./dumped_tags.csv"};
-  std::vector<DcmTag> opt_inputTags{};
+  std::vector<Tag> opt_inputTags{{DcmTag(DCM_PatientID)}};
   bool opt_dumpSecondarySeries{false};
   E_Dump_Level opt_dumpLevel{E_Dump_Level::STUDY};
 
@@ -117,6 +111,7 @@ int main(int argc, char *argv[]) {
         DcmTag tag = parseTagKey(app, tagString);
         if (tag.getGroup() == 0xffff || tag.getElement() == 0xffff)
           continue;
+        Tag tagData{tag, ""};
         opt_inputTags.emplace_back(tag);
       } while (cmd.findOption("--tag", 0, OFCommandLine::FOM_NextFromLeft));
     }
@@ -158,9 +153,8 @@ int main(int argc, char *argv[]) {
     return EXITCODE_COMMANDLINE_SYNTAX_ERROR;
   }
 
-  if (opt_inputTags.empty()) {
-    OFLOG_WARN(logger, "No additional tags to write");
-  }
+  if (opt_inputTags.size() == 1)
+    OFLOG_WARN(logger, "No additional tags to given, writing only PatientID");
 
   // const auto time = std::chrono::system_clock::now();
   const auto tt =
@@ -175,14 +169,14 @@ int main(int argc, char *argv[]) {
 
   std::string header{"PatientID;StudyInstanceUID;SeriesDescription"};
 
-  auto iter = opt_inputTags.begin();
-  while (iter != opt_inputTags.end()) {
-    if (iter != opt_inputTags.end()) {
-      header += ";";
-    }
-    header += std::string(iter->getTagName());
-    ++iter;
-  }
+  // auto iter = opt_inputTags.begin();
+  // while (iter != opt_inputTags.end()) {
+  //   if (iter != opt_inputTags.end()) {
+  //     header += ";";
+  //   }
+  //   header += std::string(iter->getTagName());
+  //   ++iter;
+  // }
 
   // const std::set<std::string> forbiddenWords{
   //     "secondary", "derived", "localizer", "topog",
@@ -195,12 +189,7 @@ int main(int argc, char *argv[]) {
   // std::string currentSeriesuid{}, lastSeriesuid{};
   // OFCondition cond{};
 
-  // can be directories with DICOM files or straight up DICOM files
-  std::vector<std::filesystem::path> paths{};
-  for (const auto &entry :
-       std::filesystem::directory_iterator(opt_inDirectory)) {
-    paths.push_back(entry);
-  }
+  gatherTags(opt_inDirectory, opt_inputTags, opt_dumpFilepath, opt_dumpLevel);
 
   // for (const auto &entry :
   //      std::filesystem::directory_iterator(opt_inDirectory)) {
@@ -281,7 +270,6 @@ int main(int argc, char *argv[]) {
   lastSeriesuid = currentSeriesuid;
   */
   // }
-  (void)iteratePaths();
   fmt::print("tags written to {}\n", dumpFilepath);
   filestream.close();
   return 0;
