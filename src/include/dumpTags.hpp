@@ -1,7 +1,4 @@
-#include <filesystem>
-#include <set>
 #include <unordered_map>
-#include <variant>
 #include <vector>
 
 #include "dcmtk/dcmdata/dctag.h"

@@ -1,24 +1,15 @@
-#include <algorithm>
-#include <chrono>
 #include <filesystem>
-#include <ranges>
 #include <set>
 #include <string>
 #include <vector>
 
-#include "fmt/chrono.h"
 #include "fmt/format.h"
-#include "fmt/os.h"
-#include "fmt/ranges.h"
 
 #include "dcmtk/dcmdata/cmdlnarg.h"
-#include "dcmtk/dcmdata/dcdatset.h"
 #include "dcmtk/dcmdata/dcdeftag.h"
 #include "dcmtk/dcmdata/dcdicent.h"
 #include "dcmtk/dcmdata/dcdict.h"
-#include "dcmtk/dcmdata/dcfilefo.h"
 #include "dcmtk/dcmdata/dcuid.h"
-#include "dcmtk/oflog/oflog.h"
 #include "dcmtk/ofstd/ofconapp.h"
 
 #include "include/dumpTags.hpp"
@@ -26,13 +17,6 @@
 
 static DcmTag parseTagKey(OFConsoleApplication &app,
                           const std::string &input_tag);
-
-auto containsForbiddenSubstring = [](const OFString &str,
-                                     const std::set<OFString> &words) {
-  return std::ranges::any_of(words, [&str](const OFString &word) {
-    return str.find(word) != OFString_npos;
-  });
-};
 
 constexpr auto FNO_CONSOLE_APPLICATION{"fnodcdump"};
 
@@ -165,138 +149,12 @@ int main(int argc, char *argv[]) {
     return EXITCODE_COMMANDLINE_SYNTAX_ERROR;
   }
 
-  // switch (opt_dumpLevel) {
-  // case E_Dump_Level::STUDY:
-  //   opt_inputTags.emplace_back(DcmTag{DCM_StudyInstanceUID});
-  // OFLOG_INFO(logger, "writing tags at study level");
-  //   break;
-  // case E_Dump_Level::SERIES:
-  //   opt_inputTags.emplace_back(DcmTag{DCM_SeriesInstanceUID});
-  //   OFLOG_INFO(logger, "writing tags at series level");
-  //   break;
-  // }
-
   if (opt_inputTags.size() == 2)
     OFLOG_WARN(logger, "No additional tags to given, writing only PatientID "
                        "and Study/SeriesInstanceUID");
 
-  // const auto time = std::chrono::system_clock::now();
-  /*
-  const auto tt =
-      std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-  const std::tm tm = *std::localtime(&tt);
-
-  // std::filesystem::path outputPath{opt_outDirectory};
-  const std::string dumpFilepath =
-      fmt::format("{}-{:%Y-%m-%d-%H-%M-%S}.csv", opt_dumpFilepath, tm);
-  // outputPath /= dumpFilename;
-  auto filestream = fmt::output_file(dumpFilepath);
-
-  std::string header{"PatientID;StudyInstanceUID;SeriesDescription"};
-  */
-  // auto iter = opt_inputTags.begin();
-  // while (iter != opt_inputTags.end()) {
-  //   if (iter != opt_inputTags.end()) {
-  //     header += ";";
-  //   }
-  //   header += std::string(iter->getTagName());
-  //   ++iter;
-  // }
-
-  // const std::set<std::string> forbiddenWords{
-  //     "secondary", "derived", "localizer", "topog",
-  //     "scout",     "report",  "dose",      "protocol"};
-
-  // filestream.print("{}\n", header);
-
-  // main work
-  // DcmFileFormat dcmff{};
-  // std::string currentSeriesuid{}, lastSeriesuid{};
-  // OFCondition cond{};
-
   gatherTags(opt_inDirectory, opt_inputTags, opt_dumpFilepath, opt_dumpLevel);
 
-  // for (const auto &entry :
-  //      std::filesystem::directory_iterator(opt_inDirectory)) {
-  //   if (entry.is_directory() || entry.path().filename() == "DICOMDIR") {
-  //     OFLOG_DEBUG(logger,
-  //                 fmt::format("skipping entry `{}`", entry.path().string()));
-  //     continue;
-  //   }
-
-  // cond = dcmff.loadFile(entry.path().string());
-  // if (cond.bad()) {
-  //   OFLOG_WARN(logger, fmt::format("failed loading file `{}`",
-  //                                  entry.path().string()));
-  //   dcmff.clear();
-  //   continue;
-  // }
-
-  // DcmDataset *dataset = dcmff.getDataset();
-  /*
-  dataset->findAndGetOFString(DCM_SeriesInstanceUID, currentSeriesuid);
-
-  if (currentSeriesuid == lastSeriesuid) {
-    continue;
-  }
-
-  std::string seriesdesc{};
-  dataset->findAndGetOFString(DCM_SeriesDescription, seriesdesc);
-
-  // filter out series first
-  if (opt_dumpSecondarySeries) {
-    std::string imagetype{};
-    dataset->findAndGetOFString(DCM_ImageType, imagetype);
-    std::transform(imagetype.begin(), imagetype.end(), imagetype.begin(),
-                   ::tolower);
-
-    // OFStandard::toLower(imagetype);
-    if (containsForbiddenSubstring(imagetype, forbiddenWords)) {
-      OFLOG_INFO(
-          logger,
-          fmt::format("dataset's ImageType contains `{}`, not writing tags",
-                      imagetype));
-      continue;
-    }
-
-    OFStandard::toLower(seriesdesc);
-    if (containsForbiddenSubstring(seriesdesc, forbiddenWords)) {
-      OFLOG_INFO(
-          logger,
-          fmt::format(
-              "dataset's SeriesDescription contains `{}`, not writing tags",
-              seriesdesc));
-      continue;
-    }
-  }
-
-  std::string patientid{}, studyuid{};
-  dataset->findAndGetOFString(DCM_PatientID, patientid);
-  dataset->findAndGetOFString(DCM_StudyInstanceUID, studyuid);
-
-  std::string values{patientid + ";" + studyuid + ";" + seriesdesc};
-  std::string val{};
-
-  if (!opt_inputTags.empty()) {
-    auto iter_val = opt_inputTags.begin();
-    while (iter_val != opt_inputTags.end()) {
-      if (iter_val != opt_inputTags.end()) {
-        values += ";";
-      }
-      dataset->findAndGetOFString(*iter_val, val);
-      values += val;
-      ++iter_val;
-      val.clear();
-    }
-  }
-
-  filestream.print("{}\n", values);
-  fmt::print("written tags for {}, {}\n", patientid, seriesdesc);
-  lastSeriesuid = currentSeriesuid;
-  */
-  // }
-  // fmt::print("tags written to {}\n", dumpFilepath);
-  // filestream.close();
   return 0;
 }
 
@@ -305,7 +163,6 @@ DcmTag parseTagKey(OFConsoleApplication &app, const std::string &input_tag) {
   unsigned short element{0xffff}; // default unknown tag
 
   const std::size_t comma = input_tag.find(',');
-  // const std::size_t equals = input_tag.find('=');
 
   std::string errorMsg{};
   if (comma != std::string::npos) {
@@ -330,13 +187,6 @@ DcmTag parseTagKey(OFConsoleApplication &app, const std::string &input_tag) {
   }
 
   DcmTag tag{group, element};
-  // const std::string tagname = tag.getTagName();
-  // if (tagname == "PatientID" || tagname == "StudyInstanceUID" ||
-  //     tagname == "SeriesInstanceUID") {
-  //   OFLOG_WARN(logger,
-  //              "skipping -t " << tagname << "; already included by default");
-  //   return {0xffff, 0xffff}; // return unknown tag
-  // }
 
   if (tag.error() != EC_Normal) {
     errorMsg = fmt::format("unknown tag key: ({:04x},{:04x}) for input tag: {}",

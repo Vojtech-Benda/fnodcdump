@@ -9,7 +9,6 @@
 #include "dcmtk/dcmdata/dcdatset.h"
 #include "dcmtk/dcmdata/dcdeftag.h"
 #include "dcmtk/dcmdata/dcfilefo.h"
-#include "dcmtk/ofstd/ofcond.h"
 
 #include "dumpTags.hpp"
 #include "logger.hpp"
@@ -125,15 +124,6 @@ OFCondition writeTags(const TagsMap &tags_map, const std::string &filepath) {
     dcm_tag = iter->dcm_tag;
     header_row.append(dcm_tag.getTagName());
   }
-  // while (iter != temp_tags.end()) {
-  //   // copy the DcmTag due to .getTagName() not marked as const
-  //   DcmTag dcm_tag = iter->dcm_tag;
-  //   header_row.append(dcm_tag.getTagName());
-
-  //   if (iter != temp_tags.end())
-  //     header_row.push_back(';');
-  //   ++iter;
-  // }
 
   filestream.print("{}\n", header_row);
 
