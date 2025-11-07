@@ -18,8 +18,7 @@ struct Tag {
 using TagsMap = std::unordered_map<std::string, std::vector<Tag>>;
 
 OFCondition gatherTags(const std::string &input_directory,
-                       const std::vector<Tag> &input_tags,
+                       std::vector<Tag> &input_tags,
                        const std::string &output_filepath, E_Dump_Level level);
 
-OFCondition writeTags(const std::vector<Tag> &retrieved_tags,
-                      const std::string &filepath);
+OFCondition writeTags(const TagsMap &tags_map, const std::string &filepath);

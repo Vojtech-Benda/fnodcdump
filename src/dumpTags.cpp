@@ -19,7 +19,6 @@ OFCondition gatherTags(const std::string &input_directory,
                        const std::string &output_filepath, E_Dump_Level level) {
   DcmFileFormat dcmff{};
   TagsMap tagsMap{};
-  std::set<std::string> dumpedInstances{};
 
   OFCondition cond{EC_Normal};
   for (const auto &entry :
@@ -41,6 +40,7 @@ OFCondition gatherTags(const std::string &input_directory,
     switch (level) {
     case E_Dump_Level::STUDY:
       cond = dataset->findAndGetOFString(DCM_StudyInstanceUID, instanceUID);
+
       break;
 
     case E_Dump_Level::SERIES:
@@ -60,17 +60,11 @@ OFCondition gatherTags(const std::string &input_directory,
       continue;
     }
 
-    // if (dumpedInstances.contains(instanceUID))
-    //   continue;
-
-    // skip if study/series instance uid exists in set
-    const auto res = dumpedInstances.insert(instanceUID);
-    if (!res.second)
+    auto [it, elem_inserted] = tagsMap.try_emplace(instanceUID);
+    if (!elem_inserted) {
+      OFLOG_INFO(logger, "uid exists: " << it->first);
       continue;
-
-    // auto [it, key_exists] = tagsMap.try_emplace(instanceUID);
-    // if (key_exists)
-    //   continue;
+    }
 
     for (auto &[dcm_tag, value] : input_tags) {
       cond = dataset->findAndGetOFString(dcm_tag.getTagKey(), value);
@@ -79,44 +73,87 @@ OFCondition gatherTags(const std::string &input_directory,
         OFLOG_WARN(logger,
                    "failure getting tag `" << dcm_tag.getTagName() << "`");
         OFLOG_WARN(logger, "reason: " << cond.text());
-        value = "n/a";
+        value = "e/r";
       }
+
+      if (value.empty())
+        value = "n/a";
     }
-    // it->second = input_tags;
+
+    OFLOG_INFO(logger, "adding tags for " << instanceUID);
+    it->second = input_tags;
   }
 
-  cond = writeTags(input_tags, output_filepath);
+  cond = writeTags(tagsMap, output_filepath);
+
+  if (cond.bad()) {
+    OFLOG_ERROR(logger, "error writing tags");
+    OFLOG_ERROR(logger, "reason: " << cond.text());
+  }
 
   return cond;
 };
 
-OFCondition writeTags(const std::vector<Tag> &retrieved_tags,
-                      const std::string &filepath) {
+OFCondition writeTags(const TagsMap &tags_map, const std::string &filepath) {
   OFCondition cond{EC_Normal};
 
   const auto tt =
       std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
   const std::tm tm = *std::localtime(&tt);
 
-  // std::filesystem::path outputPath{opt_outDirectory};
   const std::string dumpFilepath =
       fmt::format("{}-{:%Y-%m-%d-%H-%M-%S}.csv", filepath, tm);
-  // outputPath /= dumpFilename;
   auto filestream = fmt::output_file(dumpFilepath);
 
-  // random guess of initial size
-  std::string header_row{};
-  // FIXME: specify .reserve(size)
-  header_row.reserve(retrieved_tags.size() * 50);
+  const auto temp_tags = tags_map.begin()->second;
 
-  for (const Tag &tag : retrieved_tags) {
-    // copy due to .getTagName not marked as const
-    DcmTag dcm_tag = tag.dcm_tag;
-    header_row += std::string(dcm_tag.getTagName()) + ";";
-    header_row.append("ff"); // TODO: use this instead of += or +
+  /*
+  median character count of non-retired DICOM tags = 22 -> round up to 30
+  maybe small performance improvement??
+  */
+  std::string header_row{};
+  header_row.reserve(temp_tags.size() * 30);
+
+  // construct header row as: TagName1;TagName2;TagName3;...
+  auto iter = temp_tags.begin();
+  DcmTag dcm_tag = iter->dcm_tag;
+  header_row.append(dcm_tag.getTagName());
+  ++iter;
+
+  for (; iter != temp_tags.end(); ++iter) {
+    header_row.push_back(';');
+    dcm_tag = iter->dcm_tag;
+    header_row.append(dcm_tag.getTagName());
   }
+  // while (iter != temp_tags.end()) {
+  //   // copy the DcmTag due to .getTagName() not marked as const
+  //   DcmTag dcm_tag = iter->dcm_tag;
+  //   header_row.append(dcm_tag.getTagName());
+
+  //   if (iter != temp_tags.end())
+  //     header_row.push_back(';');
+  //   ++iter;
+  // }
 
   filestream.print("{}\n", header_row);
 
+  for (const auto &[key, tags_vec] : tags_map) {
+    std::string row{};
+    row.reserve(200); // guessed size, can be 0
+
+    auto iter = tags_vec.begin();
+    row.append(iter->value);
+    ++iter;
+
+    for (; iter != tags_vec.end(); ++iter) {
+      row.push_back(';');
+      row.append(iter->value);
+    }
+
+    filestream.print("{}\n", row);
+    OFLOG_INFO(logger, "written row for `" << key << "`");
+  }
+
+  filestream.close();
   return cond;
 };

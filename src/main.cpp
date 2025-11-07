@@ -52,7 +52,7 @@ int main(int argc, char *argv[]) {
   std::string opt_inDirectory{};
   std::string opt_outDirectory{"./"};
   std::string opt_dumpFilepath{"./dumped_tags.csv"};
-  std::vector<Tag> opt_inputTags{{DcmTag(DCM_PatientID)}};
+  std::vector<Tag> opt_inputTags{{DcmTag{DCM_PatientID}}};
   bool opt_dumpSecondarySeries{false};
   E_Dump_Level opt_dumpLevel{E_Dump_Level::STUDY};
 
@@ -103,21 +103,33 @@ int main(int argc, char *argv[]) {
 
     OFLog::configureFromCommandLine(cmd, app);
 
+    if (cmd.findOption("--series-level")) {
+      opt_dumpLevel = E_Dump_Level::SERIES;
+      opt_inputTags.emplace_back(DcmTag{DCM_SeriesInstanceUID});
+      OFLOG_INFO(logger, "writing tags at series level");
+    } else {
+      opt_inputTags.emplace_back(DcmTag{DCM_StudyInstanceUID});
+      OFLOG_INFO(logger, "writing tags at study level");
+    }
+
     if (cmd.findOption("--tag", 0, OFCommandLine::FOM_FirstFromLeft)) {
-      const char *tagString{nullptr};
+      std::string tagString{};
       do {
         app.checkValue(cmd.getValue(tagString));
+
+        if (tagString == "PatientID" || tagString == "StudyInstanceUID" ||
+            tagString == "SeriesInstanceUID") {
+          OFLOG_WARN(logger, "not adding tag `" << tagString
+                                                << "` included by default");
+          continue;
+        }
 
         DcmTag tag = parseTagKey(app, tagString);
         if (tag.getGroup() == 0xffff || tag.getElement() == 0xffff)
           continue;
-        Tag tagData{tag, ""};
+
         opt_inputTags.emplace_back(tag);
       } while (cmd.findOption("--tag", 0, OFCommandLine::FOM_NextFromLeft));
-    }
-
-    if (cmd.findOption("--series-level")) {
-      opt_dumpLevel = E_Dump_Level::SERIES;
     }
 
     if (cmd.findOption("--dump-secondary-series")) {
@@ -153,10 +165,23 @@ int main(int argc, char *argv[]) {
     return EXITCODE_COMMANDLINE_SYNTAX_ERROR;
   }
 
-  if (opt_inputTags.size() == 1)
-    OFLOG_WARN(logger, "No additional tags to given, writing only PatientID");
+  // switch (opt_dumpLevel) {
+  // case E_Dump_Level::STUDY:
+  //   opt_inputTags.emplace_back(DcmTag{DCM_StudyInstanceUID});
+  // OFLOG_INFO(logger, "writing tags at study level");
+  //   break;
+  // case E_Dump_Level::SERIES:
+  //   opt_inputTags.emplace_back(DcmTag{DCM_SeriesInstanceUID});
+  //   OFLOG_INFO(logger, "writing tags at series level");
+  //   break;
+  // }
+
+  if (opt_inputTags.size() == 2)
+    OFLOG_WARN(logger, "No additional tags to given, writing only PatientID "
+                       "and Study/SeriesInstanceUID");
 
   // const auto time = std::chrono::system_clock::now();
+  /*
   const auto tt =
       std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
   const std::tm tm = *std::localtime(&tt);
@@ -168,7 +193,7 @@ int main(int argc, char *argv[]) {
   auto filestream = fmt::output_file(dumpFilepath);
 
   std::string header{"PatientID;StudyInstanceUID;SeriesDescription"};
-
+  */
   // auto iter = opt_inputTags.begin();
   // while (iter != opt_inputTags.end()) {
   //   if (iter != opt_inputTags.end()) {
@@ -182,7 +207,7 @@ int main(int argc, char *argv[]) {
   //     "secondary", "derived", "localizer", "topog",
   //     "scout",     "report",  "dose",      "protocol"};
 
-  filestream.print("{}\n", header);
+  // filestream.print("{}\n", header);
 
   // main work
   // DcmFileFormat dcmff{};
@@ -270,8 +295,8 @@ int main(int argc, char *argv[]) {
   lastSeriesuid = currentSeriesuid;
   */
   // }
-  fmt::print("tags written to {}\n", dumpFilepath);
-  filestream.close();
+  // fmt::print("tags written to {}\n", dumpFilepath);
+  // filestream.close();
   return 0;
 }
 
@@ -305,13 +330,13 @@ DcmTag parseTagKey(OFConsoleApplication &app, const std::string &input_tag) {
   }
 
   DcmTag tag{group, element};
-  const OFString tagname = tag.getTagName();
-  if (tagname == "PatientID" || tagname == "StudyInstanceUID" ||
-      tagname == "SeriesDescription") {
-    OFLOG_WARN(logger,
-               "skipping -t " << tagname << "; already included by default");
-    return {0xffff, 0xffff}; // return unknown tag
-  }
+  // const std::string tagname = tag.getTagName();
+  // if (tagname == "PatientID" || tagname == "StudyInstanceUID" ||
+  //     tagname == "SeriesInstanceUID") {
+  //   OFLOG_WARN(logger,
+  //              "skipping -t " << tagname << "; already included by default");
+  //   return {0xffff, 0xffff}; // return unknown tag
+  // }
 
   if (tag.error() != EC_Normal) {
     errorMsg = fmt::format("unknown tag key: ({:04x},{:04x}) for input tag: {}",
