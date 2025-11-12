@@ -15,7 +15,8 @@
 
 OFCondition gatherTags(const std::string &input_directory,
                        std::vector<Tag> &input_tags,
-                       const std::string &output_filepath, E_Dump_Level level) {
+                       const std::string &output_filepath,
+                       E_Dump_Level dump_level) {
   DcmFileFormat dcmff{};
   TagsMap tagsMap{};
 
@@ -36,7 +37,7 @@ OFCondition gatherTags(const std::string &input_directory,
     DcmDataset *dataset = dcmff.getDataset();
 
     std::string instanceUID{}; // can be series or study instance uid value
-    switch (level) {
+    switch (dump_level) {
     case E_Dump_Level::STUDY:
       cond = dataset->findAndGetOFString(DCM_StudyInstanceUID, instanceUID);
 
@@ -65,18 +66,17 @@ OFCondition gatherTags(const std::string &input_directory,
       continue;
     }
 
-    for (auto &[dcm_tag, name, value] : input_tags) {
-      cond = dataset->findAndGetOFString(dcm_tag.getTagKey(), value);
+    for (Tag &tag : input_tags) {
+      cond = dataset->findAndGetOFString(tag.key, tag.value);
 
       if (cond.bad()) {
-        OFLOG_WARN(logger,
-                   "failure getting tag `" << dcm_tag.getTagName() << "`");
+        OFLOG_WARN(logger, "failure getting tag `" << tag.name << "`");
         OFLOG_WARN(logger, "reason: " << cond.text());
-        value = "e/r";
+        tag.value = "e/r";
       }
 
-      if (value.empty())
-        value = "n/a";
+      if (tag.value.empty())
+        tag.value = "n/a";
     }
 
     OFLOG_INFO(logger, "adding tags for " << instanceUID);
@@ -107,7 +107,7 @@ OFCondition writeTags(const TagsMap &tags_map, const std::string &filepath) {
   const auto temp_tags = tags_map.begin()->second;
 
   /*
-  median character count of non-retired DICOM tags = 22 -> round up to 30
+  median character count of non-retired DICOM tags = 22 -> round up to 30,
   maybe small performance improvement??
   */
   std::string header_row{};
@@ -115,14 +115,12 @@ OFCondition writeTags(const TagsMap &tags_map, const std::string &filepath) {
 
   // construct header row as: TagName1;TagName2;TagName3;...
   auto iter = temp_tags.begin();
-  DcmTag dcm_tag = iter->dcm_tag;
-  header_row.append(dcm_tag.getTagName());
+  header_row.append(iter->name);
   ++iter;
 
   for (; iter != temp_tags.end(); ++iter) {
     header_row.push_back(';');
-    dcm_tag = iter->dcm_tag;
-    header_row.append(dcm_tag.getTagName());
+    header_row.append(iter->name);
   }
 
   filestream.print("{}\n", header_row);

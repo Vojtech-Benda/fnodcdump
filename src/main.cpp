@@ -1,6 +1,3 @@
-#include <dcmtk/dcmdata/dctagkey.h>
-#include <dcmtk/ofstd/ofcmdln.h>
-#include <dcmtk/ofstd/ofcond.h>
 #include <filesystem>
 #include <set>
 #include <string>
@@ -13,14 +10,16 @@
 #include "dcmtk/dcmdata/dcdeftag.h"
 #include "dcmtk/dcmdata/dcdicent.h"
 #include "dcmtk/dcmdata/dcdict.h"
+#include "dcmtk/dcmdata/dctag.h"
+#include "dcmtk/dcmdata/dctagkey.h"
 #include "dcmtk/dcmdata/dcuid.h"
 #include "dcmtk/ofstd/ofconapp.h"
 
 #include "include/dumpTags.hpp"
 #include "include/logger.hpp"
 
-static DcmTag parseTagKey(OFConsoleApplication &app,
-                          const std::string &input_tag);
+static DcmTagKey parseTagKey(OFConsoleApplication &app,
+                             const std::string &input_tag);
 
 constexpr auto FNO_CONSOLE_APPLICATION{"fnodcdump"};
 
@@ -40,7 +39,7 @@ int main(int argc, char *argv[]) {
   std::string opt_inDirectory{};
   std::string opt_outDirectory{"./"};
   std::string opt_dumpFilepath{"./dumped_tags.csv"};
-  std::vector<Tag> opt_inputTags{{DcmTag{DCM_PatientID}}};
+  std::vector<Tag> opt_inputTags{{DCM_PatientID, "PatientID"}};
   std::set<std::string> opt_filterModalities{};
   std::set<std::string> opt_filterImageTypes{};
   E_Dump_Level opt_dumpLevel{E_Dump_Level::STUDY};
@@ -97,10 +96,10 @@ int main(int argc, char *argv[]) {
 
     if (cmd.findOption("--series-level")) {
       opt_dumpLevel = E_Dump_Level::SERIES;
-      opt_inputTags.emplace_back(DcmTag{DCM_SeriesInstanceUID});
+      opt_inputTags.emplace_back(DCM_SeriesInstanceUID, "SeriesInstanceUID");
       OFLOG_INFO(logger, "writing tags at series level");
     } else {
-      opt_inputTags.emplace_back(DcmTag{DCM_StudyInstanceUID});
+      opt_inputTags.emplace_back(DCM_StudyInstanceUID, "StudyInstanceUID");
       OFLOG_INFO(logger, "writing tags at study level");
     }
 
@@ -116,7 +115,7 @@ int main(int argc, char *argv[]) {
           continue;
         }
 
-        DcmTag tag = parseTagKey(app, tagString);
+        DcmTagKey tag = parseTagKey(app, tagString);
         if (tag.getGroup() == 0xffff || tag.getElement() == 0xffff)
           continue;
 
@@ -171,30 +170,26 @@ int main(int argc, char *argv[]) {
     return EXITCODE_COMMANDLINE_SYNTAX_ERROR;
   }
 
-  // for (const Tag &tag : opt_inputTags) {
-  //   fmt::print("{}\n", tag);
-  // }
-
   fmt::print("writing tags: {}\n", fmt::join(opt_inputTags, ", "));
 
   if (!opt_filterModalities.empty())
-    fmt::print("writing tags for modalities: {}\n",
+    fmt::print("filtering for modalities: {}\n",
                fmt::join(opt_filterModalities, ", "));
 
   if (!opt_filterImageTypes.empty())
-    fmt::print("writing tags for image types: {}\n",
+    fmt::print("filtering for image types: {}\n",
                fmt::join(opt_filterImageTypes, ", "));
 
-  // OFCondition cond = gatherTags(opt_inDirectory, opt_inputTags,
-  //                               opt_dumpFilepath, opt_dumpLevel);
-  // if (cond.bad()) {
-  //   return -1;
-  // }
+  OFCondition cond = gatherTags(opt_inDirectory, opt_inputTags,
+                                opt_dumpFilepath, opt_dumpLevel);
+  if (cond.bad()) {
+    return -1;
+  }
 
   return 0;
 }
 
-DcmTag parseTagKey(OFConsoleApplication &app, const std::string &input_tag) {
+DcmTagKey parseTagKey(OFConsoleApplication &app, const std::string &input_tag) {
   unsigned short group{0xffff};   // default unknown tag
   unsigned short element{0xffff}; // default unknown tag
 
@@ -231,5 +226,5 @@ DcmTag parseTagKey(OFConsoleApplication &app, const std::string &input_tag) {
     errorMsg.clear();
   }
 
-  return tag;
+  return {group, element};
 }

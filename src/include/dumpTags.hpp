@@ -3,14 +3,14 @@
 
 #include "fmt/format.h"
 
-#include "dcmtk/dcmdata/dctag.h"
+#include "dcmtk/dcmdata/dctagkey.h"
 #include "dcmtk/ofstd/ofcond.h"
 
 enum class E_Dump_Level { STUDY, SERIES };
 
 struct Tag {
-  DcmTag dcm_tag{};
-  std::string tag_name{};
+  DcmTagKey key{};
+  std::string name{};
   std::string value{};
 };
 
@@ -29,7 +29,7 @@ public:
 
   template <typename FmtContext>
   constexpr auto format(const Tag &_tag, FmtContext &ctx) const {
-    return fmt::format_to(ctx.out(), "{}", _tag.tag_name);
+    return fmt::format_to(ctx.out(), "{}", _tag.name);
   }
 };
 } // namespace fmt
