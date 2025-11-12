@@ -65,8 +65,9 @@ int main(int argc, char *argv[]) {
                 "output tags at series level (default at study level)");
   cmd.addGroup("Tag options:");
   cmd.addOption("--tag", "-t", 1, "tag: gggg,eeee or TagName",
-                "DICOM tag key/name");
+                "DICOM tag key or name");
 
+  cmd.addGroup("Filter options:");
   cmd.addOption("--modality", "-m", 1, "modality: string (default all)",
                 "write tags for matching modalities");
 
