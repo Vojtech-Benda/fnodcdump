@@ -35,7 +35,8 @@ public:
 };
 } // namespace fmt
 
-// key: Series/StudyInstanceUID, values: vector of (TagName, TagValue)
+// key: Series/StudyInstanceUID - values: vector of Tag{TagKey, TagName,
+// TagValue}
 using TagsMap = std::unordered_map<std::string, std::vector<Tag>>;
 
 OFCondition gatherTags(const std::string &input_directory,
