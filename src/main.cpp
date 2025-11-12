@@ -1,9 +1,13 @@
+#include <dcmtk/dcmdata/dctagkey.h>
+#include <dcmtk/ofstd/ofcmdln.h>
+#include <dcmtk/ofstd/ofcond.h>
 #include <filesystem>
 #include <set>
 #include <string>
 #include <vector>
 
 #include "fmt/format.h"
+#include "fmt/ranges.h"
 
 #include "dcmtk/dcmdata/cmdlnarg.h"
 #include "dcmtk/dcmdata/dcdeftag.h"
@@ -29,15 +33,16 @@ int main(int argc, char *argv[]) {
       "${}: ver. {} rel. {}\n$dcmtk: ver. {} rel. {}", FNO_CONSOLE_APPLICATION,
       APP_VERSION, RELEASE_DATE, OFFIS_DCMTK_VERSION, OFFIS_DCMTK_RELEASEDATE);
 
-  OFConsoleApplication app(FNO_CONSOLE_APPLICATION,
-                           "DICOM tag file dumping tool", rcsid.c_str());
+  OFConsoleApplication app(FNO_CONSOLE_APPLICATION, "write DICOM tags to file",
+                           rcsid.c_str());
   OFCommandLine cmd{};
 
   std::string opt_inDirectory{};
   std::string opt_outDirectory{"./"};
   std::string opt_dumpFilepath{"./dumped_tags.csv"};
   std::vector<Tag> opt_inputTags{{DcmTag{DCM_PatientID}}};
-  bool opt_dumpSecondarySeries{false};
+  std::set<std::string> opt_filterModalities{};
+  std::set<std::string> opt_filterImageTypes{};
   E_Dump_Level opt_dumpLevel{E_Dump_Level::STUDY};
 
   constexpr int LONGCOL{20};
@@ -57,21 +62,24 @@ int main(int argc, char *argv[]) {
   OFLog::addOptions(cmd);
 
   cmd.addOption("--series-level", "-series",
-                "dump tags at series level (default at study level)");
+                "output tags at series level (default at study level)");
   cmd.addGroup("Tag options:");
-  cmd.addOption("--tag", "-t", 1,
-                "tag: gggg,eeee=\"string\" or name=\"string\"",
-                "DICOM tag key");
+  cmd.addOption("--tag", "-t", 1, "tag: gggg,eeee or TagName",
+                "DICOM tag key/name");
+
+  cmd.addOption("--modality", "-m", 1, "modality: string (default all)",
+                "write tags for matching modalities");
+
   cmd.addOption(
-      "--dump-secondary-series", "-dss",
-      "include tag dump from secondary/report series (default: false)");
+      "--imagetype", "-i", 1, "modality: string (default all)",
+      "write tags for matching image types:\n\tprimary, secondary, derived");
 
   cmd.addGroup("output options:");
   // cmd.addOption("--out-directory", "-od", 1,
   //               "directory: string (default: `./` (current directory))",
   //               "write output dump file to output directory");
   cmd.addOption("--filepath", "-fp", 1,
-                "filepath: string (default: \"./dumped_tags.csv\")",
+                "filepath: string (default: `./dumped_tags.csv`)",
                 "path of the dump file excluding extension");
 
   prepareCmdLineArgs(argc, argv, FNO_CONSOLE_APPLICATION);
@@ -112,12 +120,26 @@ int main(int argc, char *argv[]) {
         if (tag.getGroup() == 0xffff || tag.getElement() == 0xffff)
           continue;
 
-        opt_inputTags.emplace_back(tag);
+        opt_inputTags.emplace_back(tag, tagString);
       } while (cmd.findOption("--tag", 0, OFCommandLine::FOM_NextFromLeft));
     }
 
-    if (cmd.findOption("--dump-secondary-series")) {
-      opt_dumpSecondarySeries = true;
+    if (cmd.findOption("--modality", 0, OFCommandLine::FOM_FirstFromLeft)) {
+      std::string modality{};
+      do {
+        app.checkValue(cmd.getValue(modality));
+        (void)opt_filterModalities.insert(modality);
+      } while (
+          cmd.findOption("--modality", 0, OFCommandLine::FOM_NextFromLeft));
+    }
+
+    if (cmd.findOption("--imagetype", 0, OFCommandLine::FOM_FirstFromLeft)) {
+      std::string imagetype{};
+      do {
+        app.checkValue(cmd.getValue(imagetype));
+        (void)opt_filterImageTypes.insert(imagetype);
+      } while (
+          cmd.findOption("--imagetype", 0, OFCommandLine::FOM_NextFromLeft));
     }
 
     // if (cmd.findOption("--out-directory")) {
@@ -149,11 +171,25 @@ int main(int argc, char *argv[]) {
     return EXITCODE_COMMANDLINE_SYNTAX_ERROR;
   }
 
-  if (opt_inputTags.size() == 2)
-    OFLOG_WARN(logger, "No additional tags to given, writing only PatientID "
-                       "and Study/SeriesInstanceUID");
+  // for (const Tag &tag : opt_inputTags) {
+  //   fmt::print("{}\n", tag);
+  // }
 
-  gatherTags(opt_inDirectory, opt_inputTags, opt_dumpFilepath, opt_dumpLevel);
+  fmt::print("writing tags: {}\n", fmt::join(opt_inputTags, ", "));
+
+  if (!opt_filterModalities.empty())
+    fmt::print("writing tags for modalities: {}\n",
+               fmt::join(opt_filterModalities, ", "));
+
+  if (!opt_filterImageTypes.empty())
+    fmt::print("writing tags for image types: {}\n",
+               fmt::join(opt_filterImageTypes, ", "));
+
+  // OFCondition cond = gatherTags(opt_inDirectory, opt_inputTags,
+  //                               opt_dumpFilepath, opt_dumpLevel);
+  // if (cond.bad()) {
+  //   return -1;
+  // }
 
   return 0;
 }

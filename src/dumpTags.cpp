@@ -65,7 +65,7 @@ OFCondition gatherTags(const std::string &input_directory,
       continue;
     }
 
-    for (auto &[dcm_tag, value] : input_tags) {
+    for (auto &[dcm_tag, name, value] : input_tags) {
       cond = dataset->findAndGetOFString(dcm_tag.getTagKey(), value);
 
       if (cond.bad()) {
