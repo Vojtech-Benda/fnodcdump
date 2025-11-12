@@ -41,7 +41,8 @@ int main(int argc, char *argv[]) {
   std::string opt_dumpFilepath{"./dumped_tags.csv"};
   std::vector<Tag> opt_inputTags{{DCM_PatientID, "PatientID"}};
   std::set<std::string> opt_filterModalities{};
-  std::set<std::string> opt_filterImageTypes{};
+  // std::set<std::string> opt_filterImageTypes{}; // TODO: <imagetype> maybe
+  // add in future
   E_Dump_Level opt_dumpLevel{E_Dump_Level::STUDY};
 
   constexpr int LONGCOL{20};
@@ -69,9 +70,11 @@ int main(int argc, char *argv[]) {
   cmd.addOption("--modality", "-m", 1, "modality: string (default all)",
                 "write tags for matching modalities");
 
+  /*
   cmd.addOption(
       "--imagetype", "-i", 1, "modality: string (default all)",
       "write tags for matching image types:\n\tprimary, secondary, derived");
+    */
 
   cmd.addGroup("output options:");
   // cmd.addOption("--out-directory", "-od", 1,
@@ -132,6 +135,7 @@ int main(int argc, char *argv[]) {
           cmd.findOption("--modality", 0, OFCommandLine::FOM_NextFromLeft));
     }
 
+    /*
     if (cmd.findOption("--imagetype", 0, OFCommandLine::FOM_FirstFromLeft)) {
       std::string imagetype{};
       do {
@@ -140,6 +144,7 @@ int main(int argc, char *argv[]) {
       } while (
           cmd.findOption("--imagetype", 0, OFCommandLine::FOM_NextFromLeft));
     }
+    */
 
     // if (cmd.findOption("--out-directory")) {
     //   app.checkValue(cmd.getValue(opt_outDirectory));
@@ -176,12 +181,14 @@ int main(int argc, char *argv[]) {
     fmt::print("filtering for modalities: {}\n",
                fmt::join(opt_filterModalities, ", "));
 
-  if (!opt_filterImageTypes.empty())
-    fmt::print("filtering for image types: {}\n",
-               fmt::join(opt_filterImageTypes, ", "));
+  // TODO: <imagetype> maybe add in future
+  // if (!opt_filterImageTypes.empty())
+  //   fmt::print("filtering for image types: {}\n",
+  //              fmt::join(opt_filterImageTypes, ", "));
 
-  OFCondition cond = gatherTags(opt_inDirectory, opt_inputTags,
-                                opt_dumpFilepath, opt_dumpLevel);
+  OFCondition cond =
+      gatherTags(opt_inDirectory, opt_inputTags, opt_dumpFilepath,
+                 opt_dumpLevel, opt_filterModalities);
   if (cond.bad()) {
     return -1;
   }

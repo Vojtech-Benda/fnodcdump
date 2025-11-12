@@ -1,3 +1,4 @@
+#include <set>
 #include <unordered_map>
 #include <vector>
 
@@ -39,6 +40,7 @@ using TagsMap = std::unordered_map<std::string, std::vector<Tag>>;
 
 OFCondition gatherTags(const std::string &input_directory,
                        std::vector<Tag> &input_tags,
-                       const std::string &output_filepath, E_Dump_Level level);
+                       const std::string &output_filepath, E_Dump_Level level,
+                       std::set<std::string> &allowed_modalities);
 
 OFCondition writeTags(const TagsMap &tags_map, const std::string &filepath);

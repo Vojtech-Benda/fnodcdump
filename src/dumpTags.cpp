@@ -16,7 +16,8 @@
 OFCondition gatherTags(const std::string &input_directory,
                        std::vector<Tag> &input_tags,
                        const std::string &output_filepath,
-                       E_Dump_Level dump_level) {
+                       E_Dump_Level dump_level,
+                       std::set<std::string> &allowed_modalities) {
   DcmFileFormat dcmff{};
   TagsMap tagsMap{};
 
@@ -35,6 +36,28 @@ OFCondition gatherTags(const std::string &input_directory,
     }
 
     DcmDataset *dataset = dcmff.getDataset();
+
+    std::string modality{};
+    cond = dataset->findAndGetOFString(DCM_Modality, modality);
+
+    if (!allowed_modalities.contains(modality)) {
+      continue;
+    }
+    // fmt::print("{}\n", modality);
+
+    /*
+    TODO: <imagetype> maybe add in future
+    needs to be ->findAndGetOFStringArray(), ->findAndGetOFString returns only
+    the first part of this array:
+    ImageType: ["DERIVED", "SECONDARY", "REFORMATTED"]
+    desired return: "DERIVED\SECONDARY\REFORMATTED" or some concat string
+    bug: "DERIVED" or "SECONDARY" only
+
+    std::string imageType{};
+    cond = dataset->findAndGetOFStringArray(DCM_ImageType, imageType);
+
+    fmt::print("{}\n", imageType);
+    */
 
     std::string instanceUID{}; // can be series or study instance uid value
     switch (dump_level) {
