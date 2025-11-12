@@ -26,7 +26,7 @@ constexpr auto FNO_CONSOLE_APPLICATION{"fnodcdump"};
 OFLogger logger = OFLog::getLogger(FNO_CONSOLE_APPLICATION);
 
 int main(int argc, char *argv[]) {
-  constexpr std::string APP_VERSION{"0.1.0"};
+  constexpr std::string APP_VERSION{"0.2.0"};
   constexpr std::string RELEASE_DATE{"2025-06-10"};
   const std::string rcsid = fmt::format(
       "${}: ver. {} rel. {}\n$dcmtk: ver. {} rel. {}", FNO_CONSOLE_APPLICATION,
